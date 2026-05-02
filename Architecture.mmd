@@ -1,0 +1,15 @@
+graph TD
+    subgraph Drivers
+        ADC[ADCSensors]
+        BLE[Mopeka/LiTime]
+    end
+    
+    DataHub{SystemState}
+    
+    subgraph UI
+        LVGL[LVGL Loop]
+    end
+
+    ADC -->|Update| DataHub
+    BLE -->|Update| DataHub
+    DataHub -->|Read| LVGL
