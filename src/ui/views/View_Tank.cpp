@@ -40,10 +40,11 @@ void View_Tanks::createTankVisual(lv_obj_t* parent, const char* name, lv_color_t
 
 void View_Tanks::update() {
     if (!bar_fresh) return;
-    auto tanks = StateService::instance().tanks;
-    if (tanks.size() >= 3) {
-        lv_bar_set_value(bar_fresh, (int)tanks[0]->get().levelPercent, LV_ANIM_ON);
-        lv_bar_set_value(bar_grey, (int)tanks[1]->get().levelPercent, LV_ANIM_ON);
-        lv_bar_set_value(bar_black, (int)tanks[2]->get().levelPercent, LV_ANIM_ON);
-    }
+
+    Tank* sorted[MAX_TANKS];
+    uint8_t n = StateService::instance().getTanksSorted(sorted, MAX_TANKS);
+
+    if (n > 0) lv_bar_set_value(bar_fresh, (int)sorted[0]->get().levelPercent, LV_ANIM_ON);
+    if (n > 1) lv_bar_set_value(bar_grey,  (int)sorted[1]->get().levelPercent, LV_ANIM_ON);
+    if (n > 2) lv_bar_set_value(bar_black, (int)sorted[2]->get().levelPercent, LV_ANIM_ON);
 }

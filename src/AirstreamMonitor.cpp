@@ -5,6 +5,7 @@
 #include "hardware/HardwareDisplay.h"
 #include "hardware/BluetoothService.h"
 #include "StateService.h"
+#include "StorageService.h"
 
 SemaphoreHandle_t i2cMutex = NULL;
 BluetoothService bleService;
@@ -12,80 +13,98 @@ BluetoothService bleService;
 // Simulation d'une tâche de fond (Core 0) qui lit les capteurs
 void taskHardwareSim(void * pvParameters) {
     while(1) {
-        // Simuler la lecture d'une batterie LiTime
         BatteryData fakeBattery;
-        fakeBattery.voltage = 13.2f + ((float)random(0, 50) / 100.0f); // Fluctuation
+        fakeBattery.voltage = 13.2f + ((float)random(0, 50) / 100.0f);
         fakeBattery.current = -2.5f;
-        fakeBattery.soc = 98.0f;
-        
-        // On injecte dans le StateService
-        if (!StateService::instance().batteries.empty()) {
-            StateService::instance().batteries[0]->set(fakeBattery);
+        fakeBattery.soc     = 98.0f;
+
+        Battery* b = StateService::instance().batteries[0];
+        if (b) b->set(fakeBattery);
+
+        static float level = 0.0f;
+        level = (level >= 100.0f) ? 0.0f : level + 0.5f;
+
+        Tank* t = StateService::instance().tanks[0];
+        if (t) {
+            TankData td;
+            td.levelPercent = level;
+            td.volumeLiters = (level / 100.0f) * 100.0f;
+            td.temperature  = 0.0f;
+            t->set(td);
         }
 
-        // Simuler la lecture d'un réservoir ADC
-        if (!StateService::instance().tanks.empty()) {
-            // On fait monter l'eau lentement pour voir le changement
-            static float level = 0.0f;
-            level = (level >= 100.0f) ? 0.0f : level + 0.5f;
-            StateService::instance().tanks[0]->updateLevel(level);
-        }
-
-        vTaskDelay(pdMS_TO_TICKS(2000)); // Lecture aux 500ms
+        vTaskDelay(pdMS_TO_TICKS(2000));
     }
 }
 
 void setup() {
     i2cMutex = xSemaphoreCreateMutex();
-
     Serial.begin(115200);
     delay(2000);
+
     Serial.println("\n=== AIRSTREAM OS : BOOT SEQUENCE ===");
 
-    // 1. On initialise l'I2C pour le CH422G (Backlight)
+    // On initialise l'I2C pour le CH422G (Backlight)
     Serial.println(F("[SETUP] Initialisation de l'I2C pour le Backlight..."));
     Wire.begin(8, 9, 100000);
     Wire.setTimeOut(50);
 
-    // 2. On instancie le driver spécifique à ton Waveshare 5B
-    //Serial.println(F("[SETUP] Initialisation du driver d'affichage..."));
-    //Waveshare5BDriver* driver = new Waveshare5BDriver();
-
-    // 3. On lance le DisplayManager avec ce driver
-    // C'est ici qu'on passe l'argument manquant !
-    //Serial.println(F("[SETUP] Démarrage du DisplayManager..."));
-    //UI_Engine::instance().begin(driver);
-
-    // 4. On démarre le BLE
+    // On démarre le BLE
     bleService.begin();
 
-    // --- CONFIGURATION DYNAMIQUE (Simule le chargement du JSON) ---
+    // On instancie le driver spécifique à ton Waveshare 5B
+    Serial.println(F("[SETUP] Initialisation du driver d'affichage..."));
+    Waveshare5BDriver* driver = new Waveshare5BDriver();
+
+    // On lance le DisplayManager avec ce driver
+    // C'est ici qu'on passe l'argument manquant !
+    Serial.println(F("[SETUP] Démarrage du DisplayManager..."));
+    UI_Engine::instance().begin(driver);
+
+    StorageService::instance().begin();
+    StorageService::instance().load();
+    AppConfig& cfg = StorageService::instance().config();
+
+    
+
     Serial.println("[SETUP] Initialisation des composants...");
+    // Instancier uniquement les slots activés, dans l'ordre ui_position
+    // (tri optionnel si l'ordre UI diverge de l'ordre des slots)
     
-    // Création des capteur Mopeka
-    
-    #define USE_MOPEKA_L 0
-    #define USE_MOPEKA_R 1
-    #define USE_MOPEKA_AUX 0
-    #define MOPEKA_MAC_L  "XX:XX:XX:XX:XX:L1"
-    #define MOPEKA_MAC_R  "D4:FB:45:CA:03:A5"
-    #define MOPEKA_MAC_AUX  "D4:FB:45:CA:03:A5"
-
-    // On crée une batterie "House" (Source BLE)
-    Serial.println("[SETUP] Création de la batterie...");
-    Battery* b = new Battery("LITIME_01", "House Battery", 200, SOURCE_BLE);
-    StateService::instance().registerBattery(b);
-
-    // On crée un réservoir "Fresh Water" (Source ADC)
-    Serial.println("[SETUP] Création des réservoirs...");
-    for (int i = 0; i < 3; i++) {
-        char id[16];
-        char name[16];
-        snprintf(id, sizeof(id), "ADC_CH%d", i);
-        snprintf(name, sizeof(name), "Tank %d", i+1);
-        Tank* t = new Tank(id, name, 100, SOURCE_ADC);
-        StateService::instance().registerTank(t);
+    // Batteries LiTime
+    for (uint8_t i = 0; i < MAX_BATTERIES; i++) {
+        auto& s = cfg.batteries[i];
+        if (!s.enabled) continue;
+        Battery* b = new Battery(s.name, s.name, s.capacity_Ah, SOURCE_BLE);
+        StateService::instance().registerBattery(i, b);
     }
+
+    // Réservoirs d'eau (ADC)
+    for (uint8_t i = 0; i < MAX_TANKS; i++) {
+        auto& s = cfg.tanks[i];
+        if (!s.enabled) continue;
+        Tank* t = new Tank(s.name, s.name, s.capacity_L, SOURCE_ADC);
+        StateService::instance().registerTank(i, t);
+    }
+
+    // Réservoirs de propane (Mopeka)
+    for (uint8_t i = 0; i < MAX_PROPANE; i++) {
+        auto& s = cfg.propane[i];
+        if (!s.enabled) continue;
+        Propane* p = new Propane(s.name, s.name, s.capacity_L, SOURCE_BLE);
+        StateService::instance().registerPropane(i, p);
+    }
+
+    // Chargeurs (Victron)
+    for (uint8_t i = 0; i < MAX_CHARGERS; i++) {
+        auto& s = cfg.chargers[i];
+        if (!s.enabled) continue;
+        Charger* c = new Charger(s.name, s.name, SOURCE_BLE);
+        StateService::instance().registerCharger(i, c);
+    }
+
+
+
 
     // --- DÉMARRAGE DU CORE 0 (Hardware) ---
     Serial.println("[SETUP] Démarrage de la tâche de simulation hardware...");
@@ -96,29 +115,40 @@ void setup() {
 }
 
 void loop() {
-    // --- SIMULATION DE L'UI (Core 1) ---
     Serial.println("\n--- DASHBOARD ---");
 
-    // Affichage des batteries
-    for (auto b : StateService::instance().batteries) {
+    // Batteries
+    for (uint8_t i = 0; i < MAX_BATTERIES; i++) {
+        Battery* b = StateService::instance().batteries[i];
+        if (!b) continue;
         BatteryData data = b->get();
-        Serial.printf("%s: %.2fV | %.1f%% | %s\n", 
-            b->getName(), data.voltage, data.soc, 
-            (b->getStatus() == DATA_VALID ? "OK" : "TIMEOUT"));
+        Serial.printf("Battery[%u] %s: %.2fV | %.1f%% | %s\n",
+            i, b->getName(), data.voltage, data.soc,
+            b->getStatus() == DATA_VALID ? "OK" : "TIMEOUT");
     }
 
-    // Affichage des réservoirs
-    for (auto t : StateService::instance().tanks) {
+    // Tanks eau
+    for (uint8_t i = 0; i < MAX_TANKS; i++) {
+        Tank* t = StateService::instance().tanks[i];
+        if (!t) continue;
         TankData data = t->get();
-        Serial.printf("%s: %.1f%% (%.1f L)\n", 
-            t->getName(), data.levelPercent, data.volumeLiters);
+        Serial.printf("Tank[%u] %s: %.1f%% (%.1fL)\n",
+            i, t->getName(), data.levelPercent, data.volumeLiters);
     }
 
-    // Test de la Pompe
+    // Propane
+    for (uint8_t i = 0; i < MAX_PROPANE; i++) {
+        Propane* p = StateService::instance().propane_tanks[i];
+        if (!p) continue;
+        PropaneData data = p->get();
+        Serial.printf("Propane[%u] %s: %.1f%% (%.1fL)\n",
+            i, t->getName(), data.levelPercent, data.volumeLiters);
+    }
+
+    // Pompe
     ActuatorData pump = StateService::instance().waterPump.get();
     Serial.printf("POMPE EAU: %s\n", pump.requestedState ? "ON" : "OFF");
 
-    // Simulation d'une interaction utilisateur (on toggle la pompe toutes les 10s)
     if (millis() % 10000 < 1000) {
         Serial.println(">>> UTILISATEUR: Appuie sur bouton POMPE");
         StateService::instance().waterPump.toggle();

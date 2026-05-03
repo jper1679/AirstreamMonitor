@@ -32,6 +32,14 @@ struct TankData {
     float temperature = 0.0f;
 };
 
+// --- BOM : Réservoir de Propane ---
+struct PropaneData {
+    float levelPercent = 0.0f;
+    float volumeLiters = 0.0f;
+    float temperature  = 0.0f;
+    float batteryV     = 0.0f;  // Voltage pile du capteur Mopeka
+};
+
 // --- BOM : Chargeur (Solaire/DC-DC) ---
 struct ChargerData {
     float inputVoltage = 0.0f;

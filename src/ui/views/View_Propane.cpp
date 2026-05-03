@@ -29,10 +29,11 @@ void View_Propane::createPropaneVisual(lv_obj_t* parent, const char* name, lv_co
 
 void View_Propane::update() {
     if (!bar_propane_left) return;
-    auto tanks = StateService::instance().tanks;
-    if (!tanks.empty()) {
-        lv_bar_set_value(bar_propane_left, (int)tanks[3]->get().levelPercent, LV_ANIM_ON);
-        lv_bar_set_value(bar_propane_right, (int)tanks[4]->get().levelPercent, LV_ANIM_ON);
-        lv_bar_set_value(bar_propane_aux, (int)tanks[5]->get().levelPercent, LV_ANIM_ON);
-    }
+
+    Propane* sorted[MAX_PROPANE];
+    uint8_t n = StateService::instance().getPropaneSorted(sorted, MAX_PROPANE);
+
+    if (n > 0) lv_bar_set_value(bar_propane_left,  (int)sorted[0]->get().levelPercent, LV_ANIM_ON);
+    if (n > 1) lv_bar_set_value(bar_propane_right, (int)sorted[1]->get().levelPercent, LV_ANIM_ON);
+    if (n > 2) lv_bar_set_value(bar_propane_aux,   (int)sorted[2]->get().levelPercent, LV_ANIM_ON);
 }

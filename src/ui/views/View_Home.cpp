@@ -27,11 +27,12 @@ void View_Home::create(lv_obj_t* parent) {
 
 void View_Home::update() {
     if (!label_summary) return;
-    // Exemple d'update simple via StateService
+
+    Battery* sorted[MAX_BATTERIES];
+    uint8_t n = StateService::instance().getBatteriesSorted(sorted, MAX_BATTERIES);
+    if (n == 0) return;
+
     char buf[32];
-    auto batteries = StateService::instance().batteries;
-    if (!batteries.empty()) {
-        snprintf(buf, sizeof(buf), "%.2f V", batteries[0]->get().voltage);
-        lv_label_set_text(label_summary, buf);
-    }
+    snprintf(buf, sizeof(buf), "%.2f V", sorted[0]->get().voltage);
+    lv_label_set_text(label_summary, buf);
 }

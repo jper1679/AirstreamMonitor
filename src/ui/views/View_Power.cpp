@@ -33,23 +33,24 @@ void View_Power::create(lv_obj_t* parent) {
 }
 
 void View_Power::update() {
-    auto batteries = StateService::instance().batteries;
-    if (batteries.empty()) return;
+    if (StateService::instance().batteryCount() == 0) return;
 
-    BatteryData data = batteries[0]->get();
-    
+    Battery* sorted[MAX_BATTERIES];
+    uint8_t n = StateService::instance().getBatteriesSorted(sorted, MAX_BATTERIES);
+    if (n == 0) return;
+
+    BatteryData data = sorted[0]->get();
+
     if (label_voltage) {
         char buf[16];
         snprintf(buf, sizeof(buf), "%.2fV", data.voltage);
         lv_label_set_text(label_voltage, buf);
     }
-
     if (label_current) {
         char buf[16];
         snprintf(buf, sizeof(buf), "%.1fA", data.current);
         lv_label_set_text(label_current, buf);
     }
-
     if (arc_soc && label_soc_text) {
         lv_arc_set_value(arc_soc, (int)data.soc);
         char buf[8];

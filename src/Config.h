@@ -33,12 +33,16 @@
 #define USE_MOPEKA_R 1
 #define USE_MOPEKA_AUX 0
 #define MOPEKA_MAC_L  "XX:XX:XX:XX:XX:L1"
-#define MOPEKA_MAC_R  "D4:FB:45:CA:03:A5"
-#define MOPEKA_MAC_AUX  "D4:FB:45:CA:03:A5"
+#define MOPEKA_MAC_R  "D4:FB:45:CA:03:EC"
+#define MOPEKA_MAC_AUX  "XX:XX:XX:XX:XX:L2"
 
 // Chargeur Victron Orion
 #define USE_VICTRON_1 1
 #define VICTRON_MAC   "F5:81:CE:F9:B9:3A"
 
+#define MAX_PROPANE 3
+#define MAX_TANKS 3
+#define MAX_BATTERIES 2
+#define MAX_CHARGERS 1
 
 #endif
